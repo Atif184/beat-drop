@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beat Drop</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: radial-gradient(circle at top, #28284d, #090913 70%); color: white; text-align: center; user-select: none; }
+    main { width: min(92vw, 680px); }
+    h1 { margin: 0 0 16px; letter-spacing: .12em; }
+    #status { min-height: 30px; font-size: 1.2rem; }
+    #lane { position: relative; height: 230px; margin: 20px auto; overflow: hidden; border: 2px solid #7777aa; border-radius: 18px; background: rgba(0,0,0,.35); }
+    #target { position: absolute; left: 50%; bottom: 24px; width: 90px; height: 90px; transform: translateX(-50%); border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 24px #b6b6ff; }
+    #note { position: absolute; left: 50%; top: -70px; width: 64px; height: 64px; transform: translateX(-50%); border-radius: 50%; background: #ff69bd; box-shadow: 0 0 24px #ff69bd; }
+    #hit { width: 220px; height: 220px; margin: 12px auto 0; border: 0; border-radius: 50%; background: #ff69bd; color: white; font-size: 2rem; font-weight: 800; box-shadow: 0 12px 0 #963b72, 0 18px 30px #000; cursor: pointer; }
+    #hit:active { transform: translateY(8px); box-shadow: 0 4px 0 #963b72, 0 10px 20px #000; }
+    #hit:disabled { cursor: not-allowed; opacity: .5; }
+    .stats { display: flex; justify-content: center; gap: 32px; margin-top: 18px; font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>BEAT DROP</h1>
+    <div id="status">Press the button to start</div>
+    <div id="lane"><div id="target"></div><div id="note"></div></div>
+    <button id="hit" disabled>HIT</button>
+    <div class="stats"><div>Score: <strong id="score">0</strong></div><div>Best: <strong id="best">0</strong></div></div>
+  </main>
+  <script>
+    const note = document.querySelector('#note');
+    const hitButton = document.querySelector('#hit');
+    const status = document.querySelector('#status');
+    const scoreText = document.querySelector('#score');
+    const bestText = document.querySelector('#best');
+
+    let audio, score = 0, position = -70, speed = 3;
+    let best = Number(localStorage.getItem('beat-drop-best') || 0);
+    let active = false, animationId;
+    bestText.textContent = best;
+
+    function playTone(frequency = 440, duration = .12) {
+      if (!audio) audio = new AudioContext();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(.2, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
+      oscillator.connect(gain); gain.connect(audio.destination);
+      oscillator.start(); oscillator.stop(audio.currentTime + duration);
+    }
+
+    function resetNote() { position = -70; speed = 3 + Math.min(score * .08, 4); }
+
+    function animate() {
+      position += speed;
+      note.style.top = position + 'px';
+      if (position > 230) {
+        playTone(90, .18); status.textContent = 'Miss!'; endGame(); return;
+      }
+      animationId = requestAnimationFrame(animate);
+    }
+
+    function startGame() {
+      score = 0; scoreText.textContent = '0';
+      status.textContent = 'Listen, watch, and hit!';
+      resetNote(); active = true; hitButton.disabled = false;
+      if (audio?.state === 'suspended') audio.resume();
+      playTone(520, .12);
+      cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(animate);
+    }
+
+    function endGame() {
+      active = false; hitButton.disabled = true;
+      if (score > best) {
+        best = score; localStorage.setItem('beat-drop-best', best); bestText.textContent = best;
+        status.textContent = 'New best: ' + best + '!';
+      } else status.textContent = 'Game over — score ' + score;
+      setTimeout(() => { hitButton.textContent = 'START'; hitButton.disabled = false; hitButton.onclick = startGame; }, 600);
+    }
+
+    hitButton.addEventListener('click', () => {
+      if (!active) return;
+      const difference = Math.abs(180 - (position + 32));
+      if (difference < 38) {
+        score++; scoreText.textContent = score;
+        status.textContent = difference < 18 ? 'Perfect!' : 'Nice!';
+        playTone(440 + score * 20, .1); resetNote();
+      } else { playTone(110, .2); status.textContent = 'Too early or too late!'; endGame(); }
+    });
+
+    hitButton.textContent = 'START'; hitButton.disabled = false; hitButton.onclick = startGame;
+    document.addEventListener('keydown', event => {
+      if (event.code === 'Space') { event.preventEventDefault?.(); hitButton.click(); }
+    });
+  </script>
+</body>
+</html>
